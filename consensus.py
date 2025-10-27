@@ -32,7 +32,7 @@ ALGO_METADATA = {
     }
 }
 
-def remove_low_cv_and_calc_consensus(arrs, CV_thresh):
+def remove_low_cv_and_recalc_consensus(arrs, CV_thresh):
     """
     For a list of discharge arrays:
     - Removes arrays with CV < threshold
@@ -79,57 +79,59 @@ def process_reach(reach_id, mntdir):
     included_algos = []
     arrs = []
     for algo, metadata in ALGO_METADATA.items():
-    infile = mntdir / 'flpe' / algo / f'{reach_id}_{algo}.nc'
-    if not os.path.exists(infile):
-      continue
-    try:
-      with Dataset(infile, 'r') as ds:
-        arr = ds[metadata['qvar']][:].filled(np.nan)
-        # treat negative discharge as NaN
-        arr[arr<0] = np.nan
-        # ignore algos with no nonnegative discharge
-        if not np.any(arr>=0):
-          continue
-        arrs.append(arr)
-        included_algos.append(algo)
-    except (IOError, OSError):
-      continue
+      infile = mntdir / 'flpe' / algo / f'{reach_id}_{algo}.nc'
+      if not os.path.exists(infile):
+        continue
+      try:
+        with Dataset(infile, 'r') as ds:
+          arr = ds[metadata['qvar']][:].filled(np.nan)
+          # treat negative discharge as NaN
+          arr[arr<0] = np.nan
+            # ignore algos with no nonnegative discharge
+          if not np.any(arr>=0):
+            continue
+
+          arrs.append(arr)
+          included_algos.append(algo)
+      except (IOError, OSError):
+        continue
 
     if not len(arrs):
-    print(f"No data for reach '{reach_id}'")
-    return
+      print(f"No data for reach '{reach_id}'")
+      return
 
 
-    #consensus_arr = np.nanmedian(np.stack(arrs, axis=0), axis=0)
+    # consensus_arr = np.nanmedian(np.stack(arrs, axis=0), axis=0)
     consensus_arr = remove_low_cv_and_recalc_consensus(arrs, CV_thresh=0.5)
 
     outdir = mntdir / 'flpe' / 'consensus'
     if not os.path.exists(outdir):
-    os.makedirs(outdir, exist_ok=True)
+      os.makedirs(outdir, exist_ok=True)
 
     outfile = outdir / f'{reach_id}_consensus.nc'
 
     with Dataset(outfile, 'w', format="NETCDF4") as dsout:
-    dsout.n_algos = str(len(included_algos))
-    dsout.contributing_algos = included_algos
-    dsout.createDimension("nt", len(consensus_arr))
-    consensus_q = dsout.createVariable("consensus_q", "f8", ("nt"), fill_value=np.nan)
-    consensus_q.long_name = 'consensus discharge'
-    consensus_q[:] = consensus_arr
+      dsout.n_algos = str(len(included_algos))
+      dsout.contributing_algos = included_algos
+      dsout.createDimension("nt", len(consensus_arr))
+      consensus_q = dsout.createVariable("consensus_q", "f8", ("nt"), fill_value=np.nan)
+      consensus_q.long_name = 'consensus discharge'
+      consensus_q[:] = consensus_arr
 
 def run_consensus(mntdir, indices):
-    """
-    Run consensus algorithm on a set of reaches.
+  """
+  Run consensus algorithm on a set of reaches.
 
-    Parameters
-    ----------
-    mntdir: Path
-    path to base mount directory
-    indices: list
-    offsets of reaches to process
-    """
+  Parameters
+  ----------
+  mntdir: Path
+  path to base mount directory
+  indices: list
+  offsets of reaches to process
+  """
 
   reachfile = mntdir / 'input' / 'reaches.json'
+  
   with open(reachfile, 'r') as fp:
     reaches = json.load(fp)
     reach_ids = [reaches[i]['reach_id'] for i in indices]
