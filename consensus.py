@@ -135,7 +135,7 @@ def run_consensus(mntdir, indices):
     reach_ids = [reaches[i]['reach_id'] for i in indices]
 
   for reach_id in reach_ids:
-     process_reach(reach_id, mntdir)
+    process_reach(reach_id, mntdir)
 
 def parse_range(index_str):
   """Parse a range string into a list of integers."""
