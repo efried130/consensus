@@ -136,7 +136,6 @@ def process_reach(reach_id, mntdir):
                 
                 time=algo_time
                 
-                print('ARRS 1', algo, len(arr), len(time), arr, time)
                 # treat negative discharge as NaN
                 arr[arr<0] = np.nan
                 # ignore algos with no nonnegative discharge
@@ -154,12 +153,10 @@ def process_reach(reach_id, mntdir):
     if not len(arrs):
         print(f"No data for reach '{reach_id}'")
         return
-    print('ARRS', arrs)
-    print('TIME ARRS', time_arrs)
-    print('INCLUDED ALGOS', included_algos)
+
 
     ##CHOOSE WHETHER TO APPLY CV FILTER HERE
-    #consensus_arr = np.nanmedian(np.stack(arrs, axis=0), axis=0)
+    # consensus_arr, time_arr = np.nanmedian(np.stack(arrs, axis=0), axis=0), time_arrs[0]
     consensus_arr, time_arr, included_algos = remove_low_cv_and_recalc_consensus(arrs=arrs, time_arrs=time_arrs, CV_thresh=0.5, included_algos=included_algos)
 
     
@@ -205,8 +202,7 @@ def process_reach(reach_id, mntdir):
 
         # Write values
         consensus_q[:] = consensus_arr_filled
-        consensus_time_str[:] = np.array(time_arr_filled, dtype="O")
-        
+        consensus_time_str[:] = np.array(time_arr_filled[0], dtype="O")
         
 def run_consensus(mntdir, indices):
     """
