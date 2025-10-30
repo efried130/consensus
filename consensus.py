@@ -202,7 +202,7 @@ def process_reach(reach_id, mntdir):
 
         # Write values
         consensus_q[:] = consensus_arr_filled
-        consensus_time_str[:] = np.array(time_arr_filled[0], dtype="O")
+        consensus_time_str[:] = np.array(time_arr_filled, dtype="O")
         
 def run_consensus(mntdir, indices):
     """
