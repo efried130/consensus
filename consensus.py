@@ -11,7 +11,6 @@ from netCDF4 import Dataset
 import numpy as np
 import os
 import datetime
-import pandas as pd
 
 ALGO_METADATA = {
     'momma': {
