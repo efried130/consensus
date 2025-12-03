@@ -15,7 +15,6 @@ from netCDF4 import Dataset
 import numpy as np
 import os
 import datetime
-import pandas as pd
 
 ALGO_METADATA = {
     'momma': {
@@ -237,7 +236,7 @@ def process_reach(reach_id, mntdir):
         consensus_q[:] = consensus_arr_filled
         consensus_time_str[:] = np.array(time_arr_filled, dtype="O")
         
-def run_consensus(mntdir, indices):
+def run_consensus(mntdir, indices, reachfile):
     """
     Run consensus algorithm on a set of reaches.
 
@@ -248,8 +247,6 @@ def run_consensus(mntdir, indices):
     indices: list
     offsets of reaches to process
     """
-
-    reachfile = mntdir / 'input' / 'reaches.json'
 
     with open(reachfile, 'r') as fp:
         reaches = json.load(fp)
@@ -280,5 +277,6 @@ if __name__ == "__main__":
     parser = ap.ArgumentParser()
     parser.add_argument("--mntdir", type=str, default="/mnt", help="Mount directory.")
     parser.add_argument("-i", "--index", type=parse_range, required=True)
+    parser.add_argument("-r", "--reachfile", type=str, default="reaches.json", help="Reach JSON file.")
     args = parser.parse_args()
-    run_consensus(Path(args.mntdir), args.index)
+    run_consensus(Path(args.mntdir), args.index, args.reachfile)
