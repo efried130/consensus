@@ -2,6 +2,10 @@
 
 Runs on a single reach or set of reaches and requires JSON data for reach retrieved by
 AWS Batch index.
+
+Offline test: 
+python3 consensus.py --mntdir "/your_mnt/" -i 0-$(($(jq length /your_path/reaches.json)-1))
+
 """
 
 import argparse as ap
@@ -22,7 +26,15 @@ ALGO_METADATA = {
         'qvar':'reach/Q',
         'time':'time'
     },
+    'h2ivdi': {
+        'qvar':'reach/Q',
+        'time':'time'
+    },
     'neobam':{
+        'qvar':'q/q',
+        'time':'time_str'
+    },
+    'geobam':{
         'qvar':'q/q',
         'time':'time_str'
     },
@@ -70,7 +82,7 @@ def remove_low_cv_and_recalc_consensus(arrs, time_arrs, CV_thresh, included_algo
         std = np.nanstd(arr)
         cv = std / mean if mean != 0 else np.nan
         
-        if not np.isnan(cv) and cv > CV_thresh:
+        if not np.isnan(cv) and cv >= CV_thresh:
             cv_arrs.append(arr)
             cv_included_algos.append(included_algos[i])
             cv_time_arrs.append(time_arrs[i])
@@ -81,13 +93,13 @@ def remove_low_cv_and_recalc_consensus(arrs, time_arrs, CV_thresh, included_algo
 
     # Compute median consensus
     consensus_arr = np.nanmedian(np.stack(cv_arrs, axis=0), axis=0)
-    selected_time_arr = time_arrs[0]
+    selected_time_arr = cv_time_arrs[0]
 
 
     # # Debug print
     # print(f"Selected algo(s) for consensus: {cv_included_algos}")
-    # print(f"Time array length: {len(selected_time_arr)}, Consensus array shape: {cv_arrs[0].shape}")
-    # print(f"Time array : {(selected_time_arr)}, Consensus array : {cv_arrs}")
+    # print(f"Time array length: {len(selected_time_arr)}, Consensus array shape: {consensus_arr.shape}")
+    # print(f"Time array : {(selected_time_arr)}, Consensus array : {consensus_arr}")
 
     return consensus_arr, selected_time_arr, cv_included_algos
 
@@ -116,6 +128,11 @@ def process_reach(reach_id, mntdir):
                 arr = ds[metadata['qvar']][:].filled(np.nan)
                 
                 algo_time = ds.variables[metadata['time']][:]
+                # Handle 2D time arrays (e.g., h2ivdi)
+                if algo_time.ndim == 2:
+                    algo_time = algo_time[:, 0]  # Take first column
+
+                # print(algo, algo_time.shape)
                 if algo == 'sic4dvar':
                     
                     mask = np.ma.getmaskarray(algo_time)
@@ -133,7 +150,24 @@ def process_reach(reach_id, mntdir):
                             (swot_ts + datetime.timedelta(days=t)).strftime("%Y-%m-%dT%H:%M:%SZ") if not np.isnan(t) else None
                             for t in valid_sic_str
                         ])
-                
+                    
+                elif algo == 'hivdi' or algo == 'h2ivdi':
+
+                    mask = np.ma.getmaskarray(algo_time)
+                    valid_indexes = [i for i in range(algo_time.shape[0])]
+
+                    if valid_indexes:
+                        valid_sic_str = [algo_time[i] for i in valid_indexes]  # keep all for indexing
+                        swot_ts = datetime.datetime(2000,1,1,0,0,0)
+
+                        # convert masked values to np.nan
+                        valid_sic_str = np.array(valid_sic_str, dtype=float)
+                        valid_sic_str = np.where(np.ma.getmaskarray(valid_sic_str), np.nan, valid_sic_str)
+
+                        algo_time = np.array([
+                            (swot_ts + datetime.timedelta(seconds=t)).strftime("%Y-%m-%dT%H:%M:%SZ") if not np.isnan(t) else None
+                            for t in valid_sic_str
+                        ])
                 time=algo_time
                 
                 # treat negative discharge as NaN
@@ -141,7 +175,6 @@ def process_reach(reach_id, mntdir):
                 # ignore algos with no nonnegative discharge
                 if not np.any(arr>=0):
                     continue
-                    return consensus_arr, consensus_time_arr, []
 
 
                 arrs.append(arr)
@@ -154,7 +187,7 @@ def process_reach(reach_id, mntdir):
         print(f"No data for reach '{reach_id}'")
         return
 
-
+    # print('INCLUDED ALGOS: ', included_algos, 'ARRS: ', arrs, '\n', 'TIME ARRS: ', time_arrs, '\n')
     ##CHOOSE WHETHER TO APPLY CV FILTER HERE
     # consensus_arr, time_arr = np.nanmedian(np.stack(arrs, axis=0), axis=0), time_arrs[0]
     consensus_arr, time_arr, included_algos = remove_low_cv_and_recalc_consensus(arrs=arrs, time_arrs=time_arrs, CV_thresh=0.5, included_algos=included_algos)
