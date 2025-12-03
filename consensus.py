@@ -4,8 +4,7 @@ Runs on a single reach or set of reaches and requires JSON data for reach retrie
 AWS Batch index.
 
 Offline test: 
-python3 consensus.py --mntdir "/your_mnt/" -i 0-$(($(jq length /your_path/reaches.json)-1))
-
+python3 consensus.py --mntdir "/your_mnt/" -r "/your_path/reaches.json" -i 0-$(($(jq length /your_path/reaches.json)-1))
 """
 
 import argparse as ap
@@ -15,6 +14,7 @@ from netCDF4 import Dataset
 import numpy as np
 import os
 import datetime
+import pandas as pd
 
 ALGO_METADATA = {
     'momma': {
