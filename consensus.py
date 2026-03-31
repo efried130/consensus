@@ -36,11 +36,16 @@ ALGO_METADATA = {
     'sad':{
         'qvar':'Qa',
         'time':'time_str'
-    }
+    },
+    'busboi':{
+        'qvar':'q/q',
+        'time':'time_str'
+    },
 }
 
 FILL_VALUE = -999999999999.0
 FILL_VALUE_STR = "no_data"
+CV_THRESH=0.3
 
 def remove_low_cv_and_recalc_consensus(arrs, time_arrs, CV_thresh, included_algos):
     """
@@ -156,7 +161,7 @@ def process_reach(reach_id, mntdir):
 
     ##CHOOSE WHETHER TO APPLY CV FILTER HERE
     # consensus_arr, time_arr = np.nanmedian(np.stack(arrs, axis=0), axis=0), time_arrs[0]
-    consensus_arr, time_arr, included_algos = remove_low_cv_and_recalc_consensus(arrs=arrs, time_arrs=time_arrs, CV_thresh=0.5, included_algos=included_algos)
+    consensus_arr, time_arr, included_algos = remove_low_cv_and_recalc_consensus(arrs=arrs, time_arrs=time_arrs, CV_thresh=CV_thresh, included_algos=included_algos)
 
     
     #Build nc file
