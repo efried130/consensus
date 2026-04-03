@@ -161,7 +161,7 @@ def process_reach(reach_id, mntdir):
 
     ##CHOOSE WHETHER TO APPLY CV FILTER HERE
     # consensus_arr, time_arr = np.nanmedian(np.stack(arrs, axis=0), axis=0), time_arrs[0]
-    consensus_arr, time_arr, included_algos = remove_low_cv_and_recalc_consensus(arrs=arrs, time_arrs=time_arrs, CV_thresh=CV_thresh, included_algos=included_algos)
+    consensus_arr, time_arr, included_algos = remove_low_cv_and_recalc_consensus(arrs=arrs, time_arrs=time_arrs, CV_thresh=CV_THRESH, included_algos=included_algos)
 
     
     #Build nc file
