@@ -29,7 +29,6 @@ ALGO_METADATA = {
         'qvar':'Q_da',
         'time':'times'
     },
-
     'busboi':{
         'qvar':'q/q',
         'time':'time'
@@ -43,13 +42,15 @@ ALGO_METADATA = {
 
 FILL_VALUE = -999999999999.0
 FILL_VALUE_STR = "no_data"
-CV_THRESH=0.3
+CV_THRESH = 0.3
+
 
 def remove_low_cv_and_recalc_consensus(arrs, time_arrs, CV_thresh, included_algos):
     """
     For a list of discharge arrays:
     - Removes arrays with CV < threshold
     - Recalculates consensus using the remaining arrays
+
     Parameters
     ----------
     arrs : list of np.ndarray
@@ -62,16 +63,16 @@ def remove_low_cv_and_recalc_consensus(arrs, time_arrs, CV_thresh, included_algo
     np.ndarray
         Cleaned and recalculated consensus array.
     """
-    
+
     cv_arrs = []
     cv_included_algos = []
     cv_time_arrs = []
-    
+
     for i, arr in enumerate(arrs):
         mean = np.nanmean(arr)
         std = np.nanstd(arr)
         cv = std / mean if mean != 0 else np.nan
-        
+
         if not np.isnan(cv) and cv > CV_thresh:
             cv_arrs.append(arr)
             cv_included_algos.append(included_algos[i])
@@ -85,13 +86,8 @@ def remove_low_cv_and_recalc_consensus(arrs, time_arrs, CV_thresh, included_algo
     consensus_arr = np.nanmedian(np.stack(cv_arrs, axis=0), axis=0)
     selected_time_arr = time_arrs[0]
 
-
-    # # Debug print
-    # print(f"Selected algo(s) for consensus: {cv_included_algos}")
-    # print(f"Time array length: {len(selected_time_arr)}, Consensus array shape: {cv_arrs[0].shape}")
-    # print(f"Time array : {(selected_time_arr)}, Consensus array : {cv_arrs}")
-
     return consensus_arr, selected_time_arr, cv_included_algos
+
 
 def process_reach(reach_id, mntdir):
     """
@@ -100,15 +96,16 @@ def process_reach(reach_id, mntdir):
     Parameters
     ----------
     mntdir: Path
-    path to base mount directory
+        path to base mount directory
     reach_id: int
-    ID of reach to process
+        ID of reach to process
     """
 
     print('reach', reach_id)
     included_algos = []
     arrs = []
     time_arrs = []
+
     for algo, metadata in ALGO_METADATA.items():
         infile = mntdir / 'flpe' / algo / f'{reach_id}_{algo}.nc'
         if not os.path.exists(infile):
@@ -116,25 +113,21 @@ def process_reach(reach_id, mntdir):
         try:
             with Dataset(infile, 'r') as ds:
                 arr = ds[metadata['qvar']][:].filled(np.nan)
-                
+
                 # Skip if array is effectively empty (e.g. busboi all-NA case returns 1x1)
                 if arr.size <= 1:
                     print(f"  Skipping {algo} for reach {reach_id}: array too small (size={arr.size})")
-                continue
+                    continue
 
-algo_time = ds.variables[metadata['time']][:]
-                
                 algo_time = ds.variables[metadata['time']][:]
                 if algo == 'sic4dvar':
-                    
                     mask = np.ma.getmaskarray(algo_time)
                     valid_indexes = [i for i in range(algo_time.shape[0])]
 
                     if valid_indexes:
-                        valid_sic_str = [algo_time[i] for i in valid_indexes]  # keep all for indexing
-                        swot_ts = datetime.datetime(2000,1,1,0,0,0)
+                        valid_sic_str = [algo_time[i] for i in valid_indexes]
+                        swot_ts = datetime.datetime(2000, 1, 1, 0, 0, 0)
 
-                        # convert masked values to np.nan
                         valid_sic_str = np.array(valid_sic_str, dtype=float)
                         valid_sic_str = np.where(np.ma.getmaskarray(valid_sic_str), np.nan, valid_sic_str)
 
@@ -142,45 +135,43 @@ algo_time = ds.variables[metadata['time']][:]
                             (swot_ts + datetime.timedelta(days=t)).strftime("%Y-%m-%dT%H:%M:%SZ") if not np.isnan(t) else None
                             for t in valid_sic_str
                         ])
-                
-                time=algo_time
-                
-                # treat negative discharge as NaN
-                arr[arr<0] = np.nan
-                # ignore algos with no nonnegative discharge
-                if not np.any(arr>=0):
-                    continue
-                    return consensus_arr, consensus_time_arr, []
 
+                time = algo_time
+
+                # treat negative discharge as NaN
+                arr[arr < 0] = np.nan
+                # ignore algos with no nonnegative discharge
+                if not np.any(arr >= 0):
+                    continue
 
                 arrs.append(arr)
                 time_arrs.append(time)
                 included_algos.append(algo)
-                 
+
         except (IOError, OSError):
-            continue               
+            continue
+
     if not len(arrs):
         print(f"No data for reach '{reach_id}'")
         return
 
-
-    ##CHOOSE WHETHER TO APPLY CV FILTER HERE
     # Ensure all arrays are the same length — drop any that don't match the majority
     if len(arrs) > 1:
         lengths = [len(a) for a in arrs]
         most_common_len = max(set(lengths), key=lengths.count)
         keep = [i for i, a in enumerate(arrs) if len(a) == most_common_len]
-    if len(keep) < len(arrs):
-        dropped = [included_algos[i] for i in range(len(arrs)) if i not in keep]
-        print(f"  Dropping {dropped} for reach {reach_id}: length mismatch")
-        arrs         = [arrs[i] for i in keep]
-        time_arrs    = [time_arrs[i] for i in keep]
-        included_algos = [included_algos[i] for i in keep]
-        
-    consensus_arr, time_arr, included_algos = remove_low_cv_and_recalc_consensus(arrs=arrs, time_arrs=time_arrs, CV_thresh=CV_THRESH, included_algos=included_algos)
+        if len(keep) < len(arrs):
+            dropped = [included_algos[i] for i in range(len(arrs)) if i not in keep]
+            print(f"  Dropping {dropped} for reach {reach_id}: length mismatch")
+            arrs           = [arrs[i] for i in keep]
+            time_arrs      = [time_arrs[i] for i in keep]
+            included_algos = [included_algos[i] for i in keep]
 
-    
-    #Build nc file
+    consensus_arr, time_arr, included_algos = remove_low_cv_and_recalc_consensus(
+        arrs=arrs, time_arrs=time_arrs, CV_thresh=CV_THRESH, included_algos=included_algos
+    )
+
+    # Build nc file
     outdir = mntdir / 'flpe' / 'consensus'
     if not os.path.exists(outdir):
         os.makedirs(outdir, exist_ok=True)
@@ -190,22 +181,20 @@ algo_time = ds.variables[metadata['time']][:]
     with Dataset(outfile, 'w', format="NETCDF4") as dsout:
         dsout.n_algos = str(len(included_algos))
         dsout.contributing_algos = included_algos
-        
-        #Add consensus Q
+
+        # Add consensus Q
         dsout.createDimension("nt", len(consensus_arr))
-        consensus_q = dsout.createVariable("consensus_q", "f8", ("nt"), fill_value=FILL_VALUE)
+        consensus_q = dsout.createVariable("consensus_q", "f8", ("nt",), fill_value=FILL_VALUE)
         consensus_q.long_name = 'consensus discharge'
         consensus_q.short_name = "discharge_consensus"
         consensus_q.tag_basic_expert = "Basic"
         consensus_q.units = "m^3/s"
-        #consensus_q.quality_flag = "dschg_c_q" Doesn't yet exist
         consensus_q.valid_min = -10000000.0
         consensus_q.valid_max = 10000000.0
-        # consensus_q.coordinates = "p_lon p_lat"
         consensus_q.comment = "Discharge from the consensus discharge algorithm."
-        
-        #Add consensus time_str
-        consensus_time_str = dsout.createVariable("time_str", str, ("nt"), fill_value="no_data")
+
+        # Add consensus time_str
+        consensus_time_str = dsout.createVariable("time_str", str, ("nt",), fill_value="no_data")
         consensus_time_str.long_name = "time (UTC)"
         consensus_time_str.standard_name = "time"
         consensus_time_str.short_name = "time_string"
@@ -216,14 +205,15 @@ algo_time = ds.variables[metadata['time']][:]
             "where the Z suffix indicates UTC time."
         )
 
-        #Fill as needed
+        # Fill as needed
         consensus_arr_filled = np.where(np.isnan(consensus_arr), FILL_VALUE, consensus_arr)
         time_arr_filled = [t if t is not None else FILL_VALUE_STR for t in time_arr]
 
         # Write values
         consensus_q[:] = consensus_arr_filled
         consensus_time_str[:] = np.array(time_arr_filled, dtype="O")
-        
+
+
 def run_consensus(mntdir, indices, reachfile):
     """
     Run consensus algorithm on a set of reaches.
@@ -231,9 +221,9 @@ def run_consensus(mntdir, indices, reachfile):
     Parameters
     ----------
     mntdir: Path
-    path to base mount directory
+        path to base mount directory
     indices: list
-    offsets of reaches to process
+        offsets of reaches to process
     """
 
     with open(reachfile, 'r') as fp:
@@ -242,6 +232,7 @@ def run_consensus(mntdir, indices, reachfile):
 
     for reach_id in reach_ids:
         process_reach(reach_id, mntdir)
+
 
 def parse_range(index_str):
     """Parse a range string into a list of integers."""
@@ -252,14 +243,15 @@ def parse_range(index_str):
             part = part.strip()
             if "-" in part:
                 start, end = part.split("-")
-                indices.extend(list(range(int(start), int(end)+1)))
+                indices.extend(list(range(int(start), int(end) + 1)))
             else:
                 indices.append(int(part))
     except (IndexError, ValueError, TypeError):
-        print(f"cannot parse range string: '{index_str}'. Must be either a single integer, a range such as 1-100, or a comma separated lists of integers and/or ranges")
-    
-    # remove duplicates and sort
+        print(f"cannot parse range string: '{index_str}'. Must be either a single integer, "
+              f"a range such as 1-100, or a comma separated list of integers and/or ranges")
+
     return sorted(list(set(indices)))
+
 
 if __name__ == "__main__":
     parser = ap.ArgumentParser()
