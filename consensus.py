@@ -21,10 +21,6 @@ ALGO_METADATA = {
         'qvar':'reach/Q',
         'time':'time'
     },
-    'neobam':{
-        'qvar':'q/q',
-        'time':'time_str'
-    },
     'metroman':{
         'qvar':'average/allq',
         'time':'time_str'
@@ -33,15 +29,17 @@ ALGO_METADATA = {
         'qvar':'Q_da',
         'time':'times'
     },
-    'sad':{
-        'qvar':'Qa',
-        'time':'time_str'
-    },
+
     'busboi':{
         'qvar':'q/q',
-        'time':'time_str'
+        'time':'time'
     },
 }
+# removing sad for version 4
+#    'sad':{
+#        'qvar':'Qa',
+#        'time':'time_str'
+#    },
 
 FILL_VALUE = -999999999999.0
 FILL_VALUE_STR = "no_data"
@@ -119,6 +117,13 @@ def process_reach(reach_id, mntdir):
             with Dataset(infile, 'r') as ds:
                 arr = ds[metadata['qvar']][:].filled(np.nan)
                 
+                # Skip if array is effectively empty (e.g. busboi all-NA case returns 1x1)
+                if arr.size <= 1:
+                    print(f"  Skipping {algo} for reach {reach_id}: array too small (size={arr.size})")
+                continue
+
+algo_time = ds.variables[metadata['time']][:]
+                
                 algo_time = ds.variables[metadata['time']][:]
                 if algo == 'sic4dvar':
                     
@@ -160,7 +165,18 @@ def process_reach(reach_id, mntdir):
 
 
     ##CHOOSE WHETHER TO APPLY CV FILTER HERE
-    # consensus_arr, time_arr = np.nanmedian(np.stack(arrs, axis=0), axis=0), time_arrs[0]
+    # Ensure all arrays are the same length — drop any that don't match the majority
+    if len(arrs) > 1:
+        lengths = [len(a) for a in arrs]
+        most_common_len = max(set(lengths), key=lengths.count)
+        keep = [i for i, a in enumerate(arrs) if len(a) == most_common_len]
+    if len(keep) < len(arrs):
+        dropped = [included_algos[i] for i in range(len(arrs)) if i not in keep]
+        print(f"  Dropping {dropped} for reach {reach_id}: length mismatch")
+        arrs         = [arrs[i] for i in keep]
+        time_arrs    = [time_arrs[i] for i in keep]
+        included_algos = [included_algos[i] for i in keep]
+        
     consensus_arr, time_arr, included_algos = remove_low_cv_and_recalc_consensus(arrs=arrs, time_arrs=time_arrs, CV_thresh=CV_THRESH, included_algos=included_algos)
 
     
