@@ -17,12 +17,12 @@ ALGO_METADATA = {
         'qvar':'Q',
         'time':'time_str'
     },
-    'hivdi': {
-        'qvar':'reach/Q',
-        'time':'time'
-    },
     'metroman':{
         'qvar':'average/allq',
+        'time':'time_str'
+    },
+    'hivdi': {
+        'qvar':'reach/Q',
         'time':'time_str'
     },
     'sic4dvar':{
